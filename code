@@ -1,0 +1,195 @@
+import IPython
+import math
+import matplotlib.pyplot as plt
+import joblib
+import numpy as np
+import numpy.matlib
+import pandas as pd
+import pickle
+import pydot
+import pylab
+import random
+import scipy 
+import scipy.cluster.hierarchy as shc
+import scipy.stats as stats
+import sklearn
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import sys
+import tabulate
+import seaborn as sns
+
+from numpy import linalg
+from pylab import *
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.integrate import *
+from scipy.integrate import quad
+from scipy.optimize import minimize
+from scipy.spatial.distance import pdist, squareform 
+from scipy.stats import *
+from scipy.stats import binom, beta, expon, mvn, randint as sp_randint, shapiro, ttest_ind, bernoulli
+from sklearn import metrics
+from sklearn.calibration import calibration_curve
+from sklearn.cluster import AgglomerativeClustering, KMeans
+from sklearn.decomposition import PCA
+from sklearn.ensemble import BaggingClassifier, RandomForestClassifier, AdaBoostClassifier,GradientBoostingClassifier, VotingClassifier, BaggingRegressor, RandomForestRegressor, AdaBoostRegressor,GradientBoostingRegressor, VotingRegressor
+from sklearn.feature_selection import SelectKBest, f_classif, SelectFromModel, RFE, RFECV
+from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, Lasso, SGDClassifier
+from sklearn.metrics import classification_report,confusion_matrix, r2_score, make_scorer, mean_squared_error, mean_absolute_error,roc_curve,accuracy_score,roc_auc_score,brier_score_loss, precision_score, recall_score,f1_score, log_loss
+from sklearn.model_selection import cross_val_score, RandomizedSearchCV, GridSearchCV, train_test_split, cross_val_score
+from sklearn.naive_bayes import GaussianNB, BernoulliNB
+from sklearn.neighbors import  KNeighborsClassifier, KNeighborsRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures, RobustScaler, StandardScaler, MinMaxScaler, MaxAbsScaler
+from sklearn.svm import SVC, LinearSVC, SVR, LinearSVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, export_graphviz
+from statsmodels.base.model import GenericLikelihoodModel
+from statsmodels.stats.stattools import durbin_watson
+from statsmodels.tools.eval_measures import rmse, aic
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.stattools import adfuller, grangercausalitytests
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
+
+
+
+data = pd.read_csv('file_name.csv')
+df= data
+a = 1
+b = 15
+    
+column_names = ["time", "outcome", "fit"]
+curves = pd.DataFrame(columns = column_names)
+performance_metrics = pd.DataFrame(['Counts','Mean outcome','Mean fit','AUC ', 'RMSE/ SQR(Brier score)'])
+    
+df=df.dropna(subset=['time', 'default_time','LTV_time', 'interest_rate_time','uer_time', 'ind_prod', 'debt_all']).copy()
+df.loc[:, 'annuity'] = ((df.loc[:,'interest_rate_time']/(100*4))*df.loc[:,'balance_orig_time'])/(1-(1+df.loc[:,'interest_rate_time']/(100*4))**(-(df.loc[:,'mat_time']-df.loc[:,'orig_time'])))
+    # Economic features
+df.loc[:, 'annuity'] = ((df.loc[:,'interest_rate_time']/(100*4))*df.loc[:,'balance_orig_time'])/(1-(1+df.loc[:,'interest_rate_time']/(100*4))**(-(df.loc[:,'mat_time']-df.loc[:,'orig_time'])))
+df.loc[:,'balance_scheduled_time']  = df.loc[:,'balance_orig_time']*(1+df.loc[:,'interest_rate_time']/(100*4))**(df.loc[:,'time']-df.loc[:,'orig_time'])-df.loc[:,'annuity']*((1+df.loc[:,'interest_rate_time']/(100*4))**(df.loc[:,'time']-df.loc[:,'orig_time'])-1)/(df.loc[:,'interest_rate_time']/(100*4))
+df.loc[:,'property_orig_time'] = df.loc[:,'balance_orig_time']/(df.loc[:,'LTV_orig_time']/100)
+df.loc[:,'cep_time']= (df.loc[:,'balance_scheduled_time'] - df.loc[:,'balance_time'])/df.loc[:,'property_orig_time']
+df.loc[:,'equity_time'] = 1-(df.loc[:,'LTV_time']/100)
+df=df.dropna(subset=['time', 'cep_time', 'equity_time'])
+
+df2 = df
+
+#df2 = df2.loc[df2['state_orig_time'] != 'AL',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'AK',:].copy()
+#df2 = df2.loc[df2['state_orig_time'] != 'AR',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'ND',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'SD',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'MT',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'DE',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'WV',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'VT',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'ME',:].copy()
+#df2 = df2.loc[df2['state_orig_time'] != 'NE',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'NH',:].copy()
+#df2 = df2.loc[df2['state_orig_time'] != 'MS',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'VI',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'DC',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'PR',:].copy()
+df2 = df2.loc[df2['state_orig_time'] != 'nan',:].copy() 
+
+
+data = df2[['cpi', 'ism', 'time', 'default_time','state_orig_time' ]]
+
+model = MLPClassifier(max_iter=10, verbose = False)
+parameter_space = {
+    'hidden_layer_sizes': [(2,2,2),(10,)],
+    'activation': ['tanh', 'relu'],
+    'solver': ['sgd', 'adam'],
+    'alpha': [0.0001, 0.05],
+    'learning_rate': ['constant','adaptive'],
+}
+
+clf = GridSearchCV(model, parameter_space, n_jobs=-1, cv=2, verbose = -1)  
+
+analysemodel(data = data,model = model,parameter_space =  parameter_space,clf =  clf, n_cv = 4)
+
+def analysemodel(data, model, parameter_space, clf, n_cv , splitvar = 'time', yvar = 'default_time', gvar ='state_orig_time' ):
+    
+    # Setting the initial values
+    a = 1
+    b = len(set(data[splitvar])) / n_cv
+    c = b    
+    column_names = ["time", "outcome", "fit"]
+    curves = pd.DataFrame(columns = column_names)
+    performance_metrics = pd.DataFrame(['Counts','Mean outcome','Mean fit','AUC ', 'RMSE/ SQR(Brier score)'])
+    
+    for i in range(0,n_cv):
+        test_data = data.loc[(data[splitvar] >= a) & (data[splitvar] <= b) ].copy() 
+        lower_train_data = data.loc[(data[splitvar] < a)].copy()
+        upper_train_data = data.loc[(data[splitvar] > b)].copy()
+        frames = [lower_train_data,upper_train_data]
+        train_data = pd.concat(frames)
+        defaultrates_states_train = train_data.groupby([splitvar, gvar])[yvar].mean().unstack(level=1).add_prefix('defaultrate_').fillna(0).reset_index(drop=False)
+        defaultrates_states = data.groupby([splitvar, gvar])[yvar].mean().unstack(level=1).add_prefix('defaultrate_').fillna(0).reset_index(drop=False)
+        scaler = StandardScaler().fit(defaultrates_states_train)
+        defaultrates_states_train1 = scaler.transform(defaultrates_states_train)
+        defaultrates_states1 = scaler.transform(defaultrates_states)
+        pca = PCA()
+        pca.fit(defaultrates_states_train1)  
+        z_train = pca.transform(defaultrates_states_train1)
+        z = pca.transform(defaultrates_states1)
+        z_train = z_train[:,0:4]
+        z = z[:,0:4]
+        Z_train = pd.DataFrame(data=z_train, columns=['PCA1', 'PCA2', 'PCA3', 'PCA4'])
+        Z = pd.DataFrame(data=z, columns=['PCA1', 'PCA2', 'PCA3','PCA4'])
+        Z_train_1 = Z_train.shift(1).add_suffix('_1')
+        Z_1 = Z.shift(1).add_suffix('_1')
+        defaultrates_states_train2 = pd.concat([defaultrates_states_train[splitvar], Z_train_1], axis=1).dropna(subset=['PCA1_1']).copy()
+        defaultrates_states2 = pd.concat([defaultrates_states[splitvar], Z_1], axis=1).dropna(subset=['PCA1_1']).copy() 
+        defaultrates_states_train2 = pd.concat([defaultrates_states_train[splitvar], Z_train_1], axis=1).dropna(subset=['PCA1_1']).copy()
+        defaultrates_states2 = pd.concat([defaultrates_states[splitvar], Z_1], axis=1).dropna(subset=['PCA1_1']).copy() 
+        train_data = pd.merge(train_data, defaultrates_states_train2, on=splitvar)
+        df3 = pd.merge(data, defaultrates_states2, on=splitvar)       
+        test_data = df3.loc[(df3[splitvar] >= a) & (df3[splitvar] <= b) ].copy() 
+        X_train = train_data
+        X_test = test_data 
+        
+        X_train = X_train.drop(columns=[splitvar, yvar, gvar])
+        X_test = X_test.drop(columns=[splitvar, yvar, gvar])
+        
+        scaler = StandardScaler().fit(X_train)
+        X_train_scaled = scaler.transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        y_train = train_data[yvar].values.reshape(-1,)
+        y_test = test_data[yvar].values.reshape(-1,)        
+        best_model = clf.fit(X_train_scaled, y_train)   
+        predictions_test = best_model.predict_proba(X_test_scaled)[:,1].T
+        fit = predictions_test
+        outcome = y_test
+        time = test_data[splitvar].values     
+        fitP=pd.DataFrame(data=fit)
+        outcomeP=pd.DataFrame(data=outcome)
+        timeP=pd.DataFrame(data=time)    
+        data_in = pd.concat([fitP, outcomeP, timeP], axis=1)
+        data_in.columns = ['fit', 'outcome', 'time']
+        means = data_in.groupby('time')[['fit', 'outcome']].mean().reset_index(drop=False)
+        data_in['outcomeD']=data_in.loc[:,'outcome']        
+        outcomeD=data_in.loc[:,'outcomeD'].values
+        roc_auc = np.nan
+        roc_auc = roc_auc_score(outcomeD, fit).round(2)   
+        t = [['Counts', len(outcome)],
+                      ['Mean outcome', (sum(outcome)/len(outcome)).round(4)],
+                      ['Mean fit', np.mean(fit).round(4)],
+                      ['AUC ', roc_auc],
+                      ['RMSE/ SQR(Brier score)', round(np.sqrt(((outcome-fit).dot(outcome-fit))/len(outcome)),4)]]
+        t=pd.DataFrame(data=the_table)
+        the_table.columns = ['Metric', 'Value']
+        performance_metrics = pd.concat([performance_metrics,the_table['Value']], axis=1)
+
+        curves_tmp = pd.DataFrame({'time': means['time'],
+                        'outcome': means['outcome'],
+                        'fit': means['fit']})
+        curves = curves.append(curves_tmp, ignore_index=True)
+        bo = pd.DataFrame()
+        bo.append(clf.best_params_, ignore_index=True)
+        print('Best parameters found:\n', clf.best_params_)
+        a = a + c
+        b = b + c
+    performance_metrics.loc[:, 'average'] = performance_metrics.mean(axis=1)
+    print('Performance metrics:\n', performance_metrics.mean(axis=1))
+
