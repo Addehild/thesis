@@ -52,63 +52,7 @@ from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 
-
-data = pd.read_csv('file_name.csv')
-df= data
-a = 1
-b = 15
-    
-column_names = ["time", "outcome", "fit"]
-curves = pd.DataFrame(columns = column_names)
-performance_metrics = pd.DataFrame(['Counts','Mean outcome','Mean fit','AUC ', 'RMSE/ SQR(Brier score)'])
-    
-df=df.dropna(subset=['time', 'default_time','LTV_time', 'interest_rate_time','uer_time', 'ind_prod', 'debt_all']).copy()
-df.loc[:, 'annuity'] = ((df.loc[:,'interest_rate_time']/(100*4))*df.loc[:,'balance_orig_time'])/(1-(1+df.loc[:,'interest_rate_time']/(100*4))**(-(df.loc[:,'mat_time']-df.loc[:,'orig_time'])))
-    # Economic features
-df.loc[:, 'annuity'] = ((df.loc[:,'interest_rate_time']/(100*4))*df.loc[:,'balance_orig_time'])/(1-(1+df.loc[:,'interest_rate_time']/(100*4))**(-(df.loc[:,'mat_time']-df.loc[:,'orig_time'])))
-df.loc[:,'balance_scheduled_time']  = df.loc[:,'balance_orig_time']*(1+df.loc[:,'interest_rate_time']/(100*4))**(df.loc[:,'time']-df.loc[:,'orig_time'])-df.loc[:,'annuity']*((1+df.loc[:,'interest_rate_time']/(100*4))**(df.loc[:,'time']-df.loc[:,'orig_time'])-1)/(df.loc[:,'interest_rate_time']/(100*4))
-df.loc[:,'property_orig_time'] = df.loc[:,'balance_orig_time']/(df.loc[:,'LTV_orig_time']/100)
-df.loc[:,'cep_time']= (df.loc[:,'balance_scheduled_time'] - df.loc[:,'balance_time'])/df.loc[:,'property_orig_time']
-df.loc[:,'equity_time'] = 1-(df.loc[:,'LTV_time']/100)
-df=df.dropna(subset=['time', 'cep_time', 'equity_time'])
-
-df2 = df
-
-#df2 = df2.loc[df2['state_orig_time'] != 'AL',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'AK',:].copy()
-#df2 = df2.loc[df2['state_orig_time'] != 'AR',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'ND',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'SD',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'MT',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'DE',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'WV',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'VT',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'ME',:].copy()
-#df2 = df2.loc[df2['state_orig_time'] != 'NE',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'NH',:].copy()
-#df2 = df2.loc[df2['state_orig_time'] != 'MS',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'VI',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'DC',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'PR',:].copy()
-df2 = df2.loc[df2['state_orig_time'] != 'nan',:].copy() 
-
-
-data = df2[['cpi', 'ism', 'time', 'default_time','state_orig_time' ]]
-
-model = MLPClassifier(max_iter=10, verbose = False)
-parameter_space = {
-    'hidden_layer_sizes': [(2,2,2),(10,)],
-    'activation': ['tanh', 'relu'],
-    'solver': ['sgd', 'adam'],
-    'alpha': [0.0001, 0.05],
-    'learning_rate': ['constant','adaptive'],
-}
-
-clf = GridSearchCV(model, parameter_space, n_jobs=-1, cv=2, verbose = -1)  
-
-analysemodel(data = data,model = model,parameter_space =  parameter_space,clf =  clf, n_cv = 4)
-
-def analysemodel(data, model, parameter_space, clf, n_cv , splitvar = 'time', yvar = 'default_time', gvar ='state_orig_time' ):
+def analysemodel(data, model, parameter_space, clf, n_cv = 4 , splitvar = 'time', yvar = 'default_time', gvar ='state_orig_time' ):
     
     # Setting the initial values
     a = 1
